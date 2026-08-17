@@ -25,12 +25,14 @@ jobs:
             bc \
             rustc \
             cargo \
-            bindgen \
             clang \
             llvm \
-            git
-          sudo apt install -y rust-bindgen-0.71
-
+            git  
+      
+      - name: Install updated bindgen-cli
+        run: |
+          cargo install bindgen-cli --version 0.71.1
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Run kernel build script
         run: |
