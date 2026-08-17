@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies & Rust toolchain
+      - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -23,14 +23,24 @@ jobs:
             libssl-dev \
             libelf-dev \
             bc \
-            rustc \
-            cargo \
-            rust-src \
             clang \
             llvm \
             libclang-dev \
-            git  
-      
+            pkg-config \
+            git
+
+      - name: Install Rust toolchain (stable) and components
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rust-src, llvm-tools-preview
+          override: true
+
+      - name: Add Rust target (if cross-compiling)
+        run: |
+          rustup target add aarch64-unknown-linux-gnu || true
+
       - name: Install updated bindgen-cli
         run: |
           cargo install bindgen-cli --version 0.71.1
