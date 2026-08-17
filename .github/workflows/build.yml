@@ -29,6 +29,21 @@ jobs:
             pkg-config \
             git
 
+      - name: Install lld and binutils (linker tools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld binutils || true
+          ld.lld --version || true
+
+      - name: Create swap (8GB) to avoid OOM during link
+        run: |
+          # create an 8GB swapfile, fallocate may not be present on some images
+          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Swap created:"; sudo swapon --show || true
+
       - name: Install Rust toolchain (stable) and components
         uses: actions-rs/toolchain@v1
         with:
@@ -68,3 +83,10 @@ jobs:
         with:
           name: fairydust-kernel-arm64
           path: dist/
+
+      - name: Disable and remove swap
+        if: always()
+        run: |
+          sudo swapoff /swapfile || true
+          sudo rm -f /swapfile || true
+          echo "Swap removed"
