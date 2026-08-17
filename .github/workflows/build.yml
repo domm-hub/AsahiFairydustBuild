@@ -29,6 +29,8 @@ jobs:
             clang \
             llvm \
             git
+          sudo apt install -y rust-bindgen-0.71
+
 
       - name: Run kernel build script
         run: |
