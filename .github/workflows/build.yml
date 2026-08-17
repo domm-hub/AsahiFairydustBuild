@@ -35,10 +35,57 @@ jobs:
           sudo apt-get install -y lld binutils || true
           ld.lld --version || true
 
+      - name: Ensure sufficient disk space and remove non-essential preinstalled packages if under threshold
+        run: |
+          set -eux
+          MIN_GB=28
+          echo "Checking available disk space on /"
+          FREE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+          echo "Available: ${FREE_GB} GB"
+          if [ "${FREE_GB}" -lt "${MIN_GB}" ]; then
+            echo "Free space (${FREE_GB}GB) is below ${MIN_GB}GB — cleaning caches and removing non-essential files."
+            # Clean apt caches
+            sudo apt-get clean || true
+            sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb || true
+            # Remove docs, manpages and locales to free space (non-essential for build)
+            sudo rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/locale/* /usr/share/info/* || true
+            # Remove snap if present (often large)
+            if command -v snap >/dev/null 2>&1; then
+              echo "Removing snap and related data"
+              sudo snap remove --purge --all || true
+              sudo apt-get remove --purge -y snapd || true
+              sudo rm -rf /var/lib/snapd /snap || true
+            fi
+            # Autoremove unused packages
+            sudo apt-get autoremove -y || true
+
+            # Recompute free space
+            FREE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+            echo "Available after cleanup: ${FREE_GB} GB"
+            if [ "${FREE_GB}" -lt "${MIN_GB}" ]; then
+              echo "Warning: still under ${MIN_GB}GB after cleanup (available=${FREE_GB}GB)."
+              echo "Will proceed but may reduce swap size to avoid running out of disk."
+              echo "::set-output name=low_space::true"
+            else
+              echo "::set-output name=low_space::false"
+            fi
+          else
+            echo "Sufficient disk space available: ${FREE_GB}GB"
+            echo "::set-output name=low_space::false"
+          fi
+        id: disk_check
+
       - name: Create swap (8GB) to avoid OOM during link
         run: |
-          # create an 8GB swapfile, fallocate may not be present on some images
-          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          # If the previous step flagged low_space, use a smaller swap to avoid filling disk
+          LOW_SPACE=${{ steps.disk_check.outputs.low_space }}
+          if [ "${LOW_SPACE}" = "true" ]; then
+            SWAP_SIZE_MB=4096
+          else
+            SWAP_SIZE_MB=8192
+          fi
+          echo "Creating swap of size ${SWAP_SIZE_MB}MB"
+          sudo fallocate -l ${SWAP_SIZE_MB}M /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=${SWAP_SIZE_MB}
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
