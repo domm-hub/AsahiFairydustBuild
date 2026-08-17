@@ -2,20 +2,41 @@ name: Build Fairydust Kernel (ARM64)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04-arm64
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies & Rust toolchain
+      - name: Install build dependencies & Rust toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc rustc cargo bindgen
+          sudo apt-get install -y \
+            build-essential \
+            flex \
+            bison \
+            libssl-dev \
+            libelf-dev \
+            bc \
+            rustc \
+            cargo \
+            bindgen \
+            clang \
+            llvm \
+            git
 
-      - name: Run build script
+      - name: Run kernel build script
         run: |
           chmod +x ./run_build.sh
           ./run_build.sh
+
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fairydust-kernel-arm64
+          path: dist/
