@@ -35,6 +35,16 @@ jobs:
           sudo apt-get install -y lld binutils || true
           ld.lld --version || true
 
+      - name: Check available system resources
+        run: |
+          echo "=== System Resources ==="
+          echo "Disk space:"
+          df -h /
+          echo ""
+          echo "Available RAM:"
+          free -h
+        id: resources_check
+
       - name: Ensure sufficient disk space and remove non-essential preinstalled packages if under threshold
         run: |
           set -eux
@@ -65,31 +75,61 @@ jobs:
             if [ "${FREE_GB}" -lt "${MIN_GB}" ]; then
               echo "Warning: still under ${MIN_GB}GB after cleanup (available=${FREE_GB}GB)."
               echo "Will proceed but may reduce swap size to avoid running out of disk."
-              echo "::set-output name=low_space::true"
+              echo "need_swap=true" >> $GITHUB_ENV
             else
-              echo "::set-output name=low_space::false"
+              echo "Sufficient disk space after cleanup: ${FREE_GB}GB"
+              echo "need_swap=false" >> $GITHUB_ENV
             fi
           else
             echo "Sufficient disk space available: ${FREE_GB}GB"
-            echo "::set-output name=low_space::false"
+            echo "need_swap=false" >> $GITHUB_ENV
           fi
         id: disk_check
 
-      - name: Create swap (8GB) to avoid OOM during link
+      - name: Check available RAM
         run: |
-          # If the previous step flagged low_space, use a smaller swap to avoid filling disk
-          LOW_SPACE=${{ steps.disk_check.outputs.low_space }}
-          if [ "${LOW_SPACE}" = "true" ]; then
-            SWAP_SIZE_MB=4096
+          echo "Checking available RAM..."
+          # Extract total RAM in GB (handle both Gi and G formats)
+          RAM_TOTAL=$(free -h | grep Mem | awk '{print $2}' | sed 's/Gi//' | sed 's/G//')
+          RAM_AVAILABLE=$(free -h | grep Mem | awk '{print $7}' | sed 's/Gi//' | sed 's/G//')
+          echo "Total RAM: ${RAM_TOTAL}GB"
+          echo "Available RAM: ${RAM_AVAILABLE}GB"
+          
+          # If available RAM >= 16GB, don't create swap
+          if (( $(echo "$RAM_AVAILABLE >= 16" | bc -l) )); then
+            echo "Sufficient RAM available (${RAM_AVAILABLE}GB >= 16GB) - swap not needed"
+            echo "need_swap=false" >> $GITHUB_ENV
           else
-            SWAP_SIZE_MB=8192
+            echo "RAM available (${RAM_AVAILABLE}GB) < 16GB - swap will be created if not already disabled"
+            echo "need_swap=true" >> $GITHUB_ENV
           fi
+        id: ram_check
+
+      - name: Prepare swap (cleanup if exists)
+        run: |
+          echo "Checking for existing swap..."
+          if swapon --show | grep -q /swapfile; then
+            echo "Existing swap found at /swapfile, disabling..."
+            sudo swapoff /swapfile || true
+          fi
+          sudo rm -f /swapfile || true
+          echo "Swap prepared"
+
+      - name: Create swap (only if needed)
+        if: env.need_swap == 'true'
+        run: |
+          echo "Creating swap file..."
+          SWAP_SIZE_MB=8192
           echo "Creating swap of size ${SWAP_SIZE_MB}MB"
-          sudo fallocate -l ${SWAP_SIZE_MB}M /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=${SWAP_SIZE_MB}
+          
+          # Use dd as primary method with better error handling
+          sudo dd if=/dev/zero of=/swapfile bs=1M count=${SWAP_SIZE_MB} status=progress
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          echo "Swap created:"; sudo swapon --show || true
+          
+          echo "Swap created:"
+          sudo swapon --show || true
 
       - name: Install Rust toolchain (stable) and components
         uses: actions-rs/toolchain@v1
@@ -134,6 +174,7 @@ jobs:
       - name: Disable and remove swap
         if: always()
         run: |
+          echo "Cleaning up swap..."
           sudo swapoff /swapfile || true
           sudo rm -f /swapfile || true
           echo "Swap removed"
