@@ -53,6 +53,10 @@ scripts/config --enable CONFIG_TYPEC_APPLE
 scripts/config --enable CONFIG_TYPEC_DP_ALTMODE
 scripts/config --enable CONFIG_TYPEC_NVIDIA_ALTMODE
 scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
+
+# Enable Apple mailbox driver (required dependency for apple_rtkit)
+scripts/config --enable CONFIG_APPLE_MAILBOX
+
 make olddefconfig
 
 # 4. Compilation Phase (split steps, verbose linking and use lld if available)
