@@ -1,6 +1,6 @@
 Name:           fairydust-kernel
 Version:        1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Asahi Linux Fairydust ARM64 kernel
 License:        GPL-2.0-only
 URL:            https://github.com/AsahiLinux/linux
@@ -14,7 +14,7 @@ URL:            https://github.com/AsahiLinux/linux
 %description
 ARM64 Linux kernel from the Asahi Linux Fairydust branch, packaged for
 Fedora Asahi systems. Includes the compressed kernel image, Apple device
-tree blobs, and kernel modules.
+tree blobs, and the complete kbuild-installed kernel module tree.
 
 %prep
 %build
@@ -33,10 +33,15 @@ if [ -d %{_topdir}/BUILDROOT/fairydust-staging/dtbs ]; then
         -exec install -m 0644 {} %{buildroot}/boot/dtbs/fairydust/ \;
 fi
 
-# Kernel modules, preserving the modules_install tree.
+# Preserve the complete modules_install tree, including .ko files and all
+# generated module metadata (modules.dep, aliases, symbols, modules.order,
+# modules.builtin, modules.builtin.modinfo, etc.).
 if [ -d %{_topdir}/BUILDROOT/fairydust-staging/modules/lib/modules ]; then
     cp -a %{_topdir}/BUILDROOT/fairydust-staging/modules/lib/modules \
         %{buildroot}/lib/
+else
+    echo "ERROR: complete kernel module tree is missing" >&2
+    exit 1
 fi
 
 %files
@@ -45,5 +50,9 @@ fi
 /lib/modules/*
 
 %changelog
+* Tue Aug 25 2026 Fairydust Build <fairydust@localhost> - 1-2
+- Use the real Asahi configuration with Fairydust DP options.
+- Package and validate the complete kbuild module tree.
+
 * Thu Aug 20 2026 Fairydust Build <fairydust@localhost> - 1-1
 - Initial Fairydust ARM64 kernel RPM
