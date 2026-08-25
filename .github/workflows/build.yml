@@ -18,11 +18,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
-            flex \
+            bc \
             bison \
+            flex \
             libssl-dev \
             libelf-dev \
-            bc \
+            libncurses-dev \
+            dwarves \
+            device-tree-compiler \
+            python3 \
+            perl \
+            rsync \
+            cpio \
+            kmod \
+            xz-utils \
+            zstd \
+            lz4 \
+            ccache \
             clang \
             llvm \
             libclang-dev \
@@ -32,8 +44,8 @@ jobs:
       - name: Install lld and binutils (linker tools)
         run: |
           sudo apt-get update
-          sudo apt-get install -y lld binutils || true
-          ld.lld --version || true
+          sudo apt-get install -y lld binutils
+          ld.lld --version
 
       - name: Check available system resources
         run: |
@@ -54,27 +66,20 @@ jobs:
           echo "Available: ${FREE_GB} GB"
           if [ "${FREE_GB}" -lt "${MIN_GB}" ]; then
             echo "Free space (${FREE_GB}GB) is below ${MIN_GB}GB — cleaning caches and removing non-essential files."
-            # Clean apt caches
             sudo apt-get clean || true
             sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb || true
-            # Remove docs, manpages and locales to free space (non-essential for build)
             sudo rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/locale/* /usr/share/info/* || true
-            # Remove snap if present (often large)
             if command -v snap >/dev/null 2>&1; then
               echo "Removing snap and related data"
               sudo snap remove --purge --all || true
               sudo apt-get remove --purge -y snapd || true
               sudo rm -rf /var/lib/snapd /snap || true
             fi
-            # Autoremove unused packages
             sudo apt-get autoremove -y || true
-
-            # Recompute free space
             FREE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
             echo "Available after cleanup: ${FREE_GB} GB"
             if [ "${FREE_GB}" -lt "${MIN_GB}" ]; then
               echo "Warning: still under ${MIN_GB}GB after cleanup (available=${FREE_GB}GB)."
-              echo "Will proceed but may reduce swap size to avoid running out of disk."
               echo "need_swap=true" >> $GITHUB_ENV
             else
               echo "Sufficient disk space after cleanup: ${FREE_GB}GB"
@@ -89,18 +94,15 @@ jobs:
       - name: Check available RAM
         run: |
           echo "Checking available RAM..."
-          # Extract total RAM in GB (handle both Gi and G formats)
           RAM_TOTAL=$(free -h | grep Mem | awk '{print $2}' | sed 's/Gi//' | sed 's/G//')
           RAM_AVAILABLE=$(free -h | grep Mem | awk '{print $7}' | sed 's/Gi//' | sed 's/G//')
           echo "Total RAM: ${RAM_TOTAL}GB"
           echo "Available RAM: ${RAM_AVAILABLE}GB"
-          
-          # If available RAM >= 16GB, don't create swap
           if (( $(echo "$RAM_AVAILABLE >= 16" | bc -l) )); then
             echo "Sufficient RAM available (${RAM_AVAILABLE}GB >= 16GB) - swap not needed"
             echo "need_swap=false" >> $GITHUB_ENV
           else
-            echo "RAM available (${RAM_AVAILABLE}GB) < 16GB - swap will be created if not already disabled"
+            echo "RAM available (${RAM_AVAILABLE}GB) < 16GB - swap will be created"
             echo "need_swap=true" >> $GITHUB_ENV
           fi
         id: ram_check
@@ -120,15 +122,10 @@ jobs:
         run: |
           echo "Creating swap file..."
           SWAP_SIZE_MB=8192
-          echo "Creating swap of size ${SWAP_SIZE_MB}MB"
-          
-          # Use dd as primary method with better error handling
           sudo dd if=/dev/zero of=/swapfile bs=1M count=${SWAP_SIZE_MB} status=progress
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          
-          echo "Swap created:"
           sudo swapon --show || true
 
       - name: Install Rust toolchain (stable) and components
@@ -141,19 +138,12 @@ jobs:
 
       - name: Configure Rust environment
         run: |
-          # Ensure the env is visible to subsequent steps
           echo "RUSTUP_TOOLCHAIN=stable" >> $GITHUB_ENV
           SYSROOT=$(rustc --print sysroot)
           echo "RUST_LIB_SRC=${SYSROOT}/lib/rustlib/src/rust/library" >> $GITHUB_ENV
-          # Ensure rust-src component is present (idempotent)
           rustup component add rust-src || true
-          # Diagnostic info
           rustc --version
           rustup show
-
-      - name: Add Rust target (if cross-compiling)
-        run: |
-          rustup target add aarch64-unknown-linux-gnu || true
 
       - name: Install updated bindgen-cli
         run: |
