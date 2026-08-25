@@ -30,8 +30,8 @@ echo "=== [3/6] Preparing Asahi + Fairydust kernel configuration ==="
 
 # Start from the normal ARM64 baseline, then merge the Asahi configuration
 # shipped by the exact Fairydust kernel branch being built.
-make defconfig
-./scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/asahi.config
+cp "${TARGET_DIR}/base.config" .config
+make olddefconfig
 
 if ! make rustavailable; then
     echo "ERROR: Rust toolchain is not properly configured for kernel build!"
