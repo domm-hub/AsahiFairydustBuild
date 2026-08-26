@@ -43,23 +43,27 @@ fi
 # configuration changes.
 scripts/config --enable CONFIG_RUST
 scripts/config --enable CONFIG_DRM_APPLE
+scripts/config --enable CONFIG_TYPEC
 scripts/config --enable CONFIG_TYPEC_APPLE
 scripts/config --enable CONFIG_TYPEC_DP_ALTMODE
 scripts/config --enable CONFIG_TYPEC_NVIDIA_ALTMODE
 scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
 scripts/config --enable CONFIG_APPLE_MAILBOX
 scripts/config --disable CONFIG_DEBUG_INFO_BTF
-scripts/config --enable CONFIG_TYPEC
-scripts/config --enable CONFIG_TYPEC_APPLE
 
-# Fix built-in/module mismatch: DRM_APPLE_AUDIO was =y while CONFIG_SND/
-# CONFIG_SND_PCM are =m in the Fedora baseline, causing undefined-reference
-# link errors in drivers/gpu/drm/apple/audio.c. Force it to match SND=m.
-scripts/config --module CONFIG_DRM_APPLE_AUDIO
+# CONFIG_DRM_APPLE_AUDIO can only be 'y' or 'n' in this Kconfig (Kconfig
+# rejected 'm' with: "symbol value 'm' invalid for DRM_APPLE_AUDIO").
+# It needs CONFIG_SND/CONFIG_SND_PCM/CONFIG_SND_TIMER built in (not modules)
+# to link successfully, so force all of them to 'y' together.
+scripts/config --enable CONFIG_SND
+scripts/config --enable CONFIG_SND_PCM
+scripts/config --enable CONFIG_SND_TIMER
+scripts/config --enable CONFIG_DRM_APPLE_AUDIO
 
 make olddefconfig
 
 echo "=== Selected Asahi/Fairydust configuration ==="
+CONFIG_CHECK_FAILED=0
 for CONFIG in \
   CONFIG_ARCH_APPLE \
   CONFIG_DRM_ASAHI \
@@ -80,8 +84,18 @@ for CONFIG in \
   CONFIG_BT_HCIBCM4377 \
   CONFIG_HID_APPLE \
   CONFIG_HID_MAGICMOUSE; do
-  grep -E "^(${CONFIG}=|# ${CONFIG} is not set)" .config || echo "WARNING: ${CONFIG} is not present"; exit
+  if grep -qE "^(${CONFIG}=|# ${CONFIG} is not set)" .config; then
+    grep -E "^(${CONFIG}=|# ${CONFIG} is not set)" .config
+  else
+    echo "WARNING: ${CONFIG} is not present"
+    CONFIG_CHECK_FAILED=1
+  fi
 done
+
+if [ "$CONFIG_CHECK_FAILED" -ne 0 ]; then
+  echo "ERROR: one or more required configs are missing from .config (see WARNING lines above). Aborting before build."
+  exit 1
+fi
 
 # Runs a make target with quiet, per-file compact output (CC/LD/AR/AS lines)
 # instead of full V=1 command dumps, to keep log size down. A running count
