@@ -49,6 +49,8 @@ scripts/config --enable CONFIG_TYPEC_NVIDIA_ALTMODE
 scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
 scripts/config --enable CONFIG_APPLE_MAILBOX
 scripts/config --disable CONFIG_DEBUG_INFO_BTF
+scripts/config --enable CONFIG_TYPEC
+scripts/config --enable CONFIG_TYPEC_APPLE
 
 # Fix built-in/module mismatch: DRM_APPLE_AUDIO was =y while CONFIG_SND/
 # CONFIG_SND_PCM are =m in the Fedora baseline, causing undefined-reference
@@ -78,7 +80,7 @@ for CONFIG in \
   CONFIG_BT_HCIBCM4377 \
   CONFIG_HID_APPLE \
   CONFIG_HID_MAGICMOUSE; do
-  grep -E "^(${CONFIG}=|# ${CONFIG} is not set)" .config || echo "WARNING: ${CONFIG} is not present"
+  grep -E "^(${CONFIG}=|# ${CONFIG} is not set)" .config || echo "WARNING: ${CONFIG} is not present"; exit
 done
 
 # Runs a make target with quiet, per-file compact output (CC/LD/AR/AS lines)
