@@ -44,7 +44,6 @@ fi
 scripts/config --enable CONFIG_RUST
 scripts/config --enable CONFIG_DRM_APPLE
 scripts/config --enable CONFIG_TYPEC
-scripts/config --enable CONFIG_TYPEC_APPLE
 scripts/config --enable CONFIG_TYPEC_DP_ALTMODE
 scripts/config --enable CONFIG_TYPEC_NVIDIA_ALTMODE
 scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
@@ -72,7 +71,6 @@ for CONFIG in \
   CONFIG_DRM_ADP \
   CONFIG_PHY_APPLE_DPTX \
   CONFIG_MUX_APPLE_DPXBAR \
-  CONFIG_TYPEC_APPLE \
   CONFIG_TYPEC_DP_ALTMODE \
   CONFIG_TYPEC_NVIDIA_ALTMODE \
   CONFIG_TYPEC_TBT_ALTMODE \
