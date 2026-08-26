@@ -50,6 +50,11 @@ scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
 scripts/config --enable CONFIG_APPLE_MAILBOX
 scripts/config --disable CONFIG_DEBUG_INFO_BTF
 
+# Fix built-in/module mismatch: DRM_APPLE_AUDIO was =y while CONFIG_SND/
+# CONFIG_SND_PCM are =m in the Fedora baseline, causing undefined-reference
+# link errors in drivers/gpu/drm/apple/audio.c. Force it to match SND=m.
+scripts/config --module CONFIG_DRM_APPLE_AUDIO
+
 make olddefconfig
 
 echo "=== Selected Asahi/Fairydust configuration ==="
@@ -57,6 +62,7 @@ for CONFIG in \
   CONFIG_ARCH_APPLE \
   CONFIG_DRM_ASAHI \
   CONFIG_DRM_APPLE \
+  CONFIG_DRM_APPLE_AUDIO \
   CONFIG_DRM_ADP \
   CONFIG_PHY_APPLE_DPTX \
   CONFIG_MUX_APPLE_DPXBAR \
@@ -75,18 +81,50 @@ for CONFIG in \
   grep -E "^(${CONFIG}=|# ${CONFIG} is not set)" .config || echo "WARNING: ${CONFIG} is not present"
 done
 
+# Runs a make target with quiet, per-file compact output (CC/LD/AR/AS lines)
+# instead of full V=1 command dumps, to keep log size down. A running count
+# of processed files is printed so progress is still visible. Full detail
+# is preserved in $LOG_FILE regardless, and the last N lines are dumped on
+# failure by the caller.
+run_make_quiet() {
+  local target="$1"
+  local count=0
+  local start_ts
+  start_ts=$(date +%s)
+
+  set +e
+  make KCFLAGS="-g0" "$target" 2>&1 | while IFS= read -r line; do
+    echo "$line" >> "$LOG_FILE"
+    if [[ "$line" =~ ^[[:space:]]*(CC|LD|AR|AS|CC\ \[M\]|LD\ \[M\])[[:space:]] ]]; then
+      count=$((count + 1))
+      if (( count % 25 == 0 )); then
+        elapsed=$(( $(date +%s) - start_ts ))
+        printf "  [%s] %d files processed (%ds elapsed)\n" "$target" "$count" "$elapsed"
+      fi
+    elif [[ "$line" =~ (error|Error|ERROR) ]]; then
+      echo "$line"
+    fi
+  done
+  local status=${PIPESTATUS[0]}
+  set -e
+
+  local total_elapsed=$(( $(date +%s) - start_ts ))
+  printf "  [%s] done: %d files processed in %ds\n" "$target" "$count" "$total_elapsed"
+  return "$status"
+}
+
 echo "=== [4/6] Building kernel image ==="
 if command -v ld.lld >/dev/null 2>&1; then
   echo "Using lld as the linker (ld.lld detected)."
   export LD=ld.lld
 fi
 
-make V=1 KCFLAGS="-g0" Image.gz || { echo "Image build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
+run_make_quiet Image.gz || { echo "Image build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
 
 echo "=== [5/6] Building DTBs and modules ==="
-make V=1 KCFLAGS="-g0" dtbs || { echo "DTB build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
-make V=1 KCFLAGS="-g0" modules || { echo "Modules build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
-make V=1 KCFLAGS="-g0" vmlinux || { echo "vmlinux link failed"; tail -n 400 "${LOG_FILE}"; exit 1; }
+run_make_quiet dtbs || { echo "DTB build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
+run_make_quiet modules || { echo "Modules build failed"; tail -n 200 "${LOG_FILE}"; exit 1; }
+run_make_quiet vmlinux || { echo "vmlinux link failed"; tail -n 400 "${LOG_FILE}"; exit 1; }
 
 echo "=== [6/6] Packaging build output ==="
 mkdir -p "${TARGET_DIR}/dist/dtbs"
