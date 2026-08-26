@@ -48,6 +48,7 @@ scripts/config --enable CONFIG_TYPEC_DP_ALTMODE
 scripts/config --enable CONFIG_TYPEC_NVIDIA_ALTMODE
 scripts/config --enable CONFIG_TYPEC_TBT_ALTMODE
 scripts/config --enable CONFIG_APPLE_MAILBOX
+scripts/config --disable CONFIG_DEBUG_INFO_BTF
 
 make olddefconfig
 
