@@ -6,7 +6,7 @@ on:
       file_url:
         description: 'URL of the file to download'
         required: true
-        default: 'https://tobhe.de'
+        default: 'https://files.tobhe.de/ubuntu/ubuntu-24.04-preinstalled-desktop-arm64%2Basahi.img'
 
 jobs:
   build:
@@ -29,7 +29,7 @@ jobs:
     - name: Compress Absolute Maximum (7z LZMA2 Ultra)
       run: |
         echo "Compressing using 4 ARM cores..."
-        7z a -t7z -m0=lzma2 -mx=9 -md=1536m -mfb=273 -mc=1000 -ms=on -mmt=4 compressed_asahi.7z asahi-ubuntu.img
+        7z a -t7z -m0=lzma2 -mx=9 -md=512m -mfb=273 -mc=1000 -ms=on -mmt=4 compressed_asahi.7z asahi-ubuntu.img
 
     - name: Upload Artifact First
       if: always()
