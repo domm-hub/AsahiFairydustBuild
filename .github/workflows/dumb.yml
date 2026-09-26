@@ -1,6 +1,7 @@
-name: Remote Download and Compress
+name: Remote Download, Compress, and Tunnel
+
 on:
-  workflow_dispatch: # Allows you to manually trigger it from the browser
+  workflow_dispatch:
     inputs:
       file_url:
         description: 'URL of the file to download'
@@ -16,19 +17,35 @@ jobs:
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Download the large image
       run: |
         echo "Downloading image from input URL..."
         curl -L -o asahi-ubuntu.img "${{ inputs.file_url }}"
 
-    - name: Compress Ultra Strong with 7z
+    - name: Compress Absolute Maximum (7z LZMA2 Ultra)
       run: |
-        echo "Compressing with LZMA2 (Ultra Level 9)..."
-        7z a -t7z -m0=lzma2 -mx=9 -md=64m compressed_asahi.7z asahi-ubuntu.img
+        echo "Compressing with absolute maximum 7z settings..."
+        7z a -t7z -m0=lzma2 -mx=9 -md=1536m -mfb=273 -mc=1000 -ms=on -mmt=2 compressed_asahi.7z asahi-ubuntu.img
 
-    - name: Upload to a free transfer service
+    - name: Start Local HTTP Server & Tunnel Port
       run: |
-        echo "Uploading compressed file to bashupload..."
-        # This gives you a unique download link valid for 3 days
-        curl -T compressed_asahi.7z https://bashupload.com
+        # 1. Start Python HTTP server in background on port 8000
+        python3 -m http.server 8000 &
+        
+        # 2. Open reverse TCP tunnel via Pinggy
+        ssh -p 443 -o StrictHostKeyChecking=no -R0:localhost:8000 tcp@free.pinggy.io > tunnel.log 2>&1 &
+        
+        # Give tunnel time to establish and retrieve assigned port
+        sleep 5
+        
+        # 3. Print tunnel connection details to action logs
+        echo "=========================================="
+        echo "YOUR PUBLIC DOWNLOAD LINK DETAILS:"
+        cat tunnel.log
+        echo "=========================================="
+        
+        # Keep job alive for 1 hour to allow downloading
+        sleep 3600
