@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm  # 4 vCPUs, 16 GB RAM (ARM64)
     steps:
     - name: Free up disk space
       run: |
@@ -20,17 +20,27 @@ jobs:
         sudo rm -rf /usr/local/share/boost
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    - name: Download the large image
+    - name: Download the large image fast
       run: |
-        echo "Downloading image from input URL..."
-        curl -L -o asahi-ubuntu.img "${{ inputs.file_url }}"
+        sudo apt-get update && sudo apt-get install -y aria2
+        echo "Downloading image using aria2c..."
+        aria2c -x 16 -s 16 -o asahi-ubuntu.img "${{ inputs.file_url }}"
 
     - name: Compress Absolute Maximum (7z LZMA2 Ultra)
       run: |
-        echo "Compressing with absolute maximum 7z settings..."
-        7z a -t7z -m0=lzma2 -mx=9 -md=1536m -mfb=273 -mc=1000 -ms=on -mmt=2 compressed_asahi.7z asahi-ubuntu.img
+        echo "Compressing using 4 ARM cores..."
+        7z a -t7z -m0=lzma2 -mx=9 -md=1536m -mfb=273 -mc=1000 -ms=on -mmt=4 compressed_asahi.7z asahi-ubuntu.img
+
+    - name: Upload Artifact First
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: compressed-asahi-ubuntu
+        path: compressed_asahi.7z
+        retention-days: 1
 
     - name: Start Local HTTP Server & Tunnel Port
+      if: always()
       run: |
         # 1. Start Python HTTP server in background on port 8000
         python3 -m http.server 8000 &
